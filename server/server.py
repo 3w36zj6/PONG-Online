@@ -38,6 +38,10 @@ class MyCustomNamespace(socketio.Namespace):
         self.emit("response", msg)
         print(f"[{datetime.now().strftime(YMDHMS)}] emit all : {msg}")
 
+    def on_send_game_status(self, sid, params):
+        self.emit("response", params, room=params["room_id"], skip_sid=sid)
+        print(f"[{datetime.now().strftime(YMDHMS)}] game status : {params}")
+
     def on_disconnect(self, sid):
         print(f"[{datetime.now().strftime(YMDHMS)}] disconnect sid : {sid}")
 

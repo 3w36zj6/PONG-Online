@@ -16,9 +16,11 @@ class MyCustomNamespace(socketio.ClientNamespace):
 
     def on_response(self, msg):
         print(f"[{datetime.now().strftime(YMDHMS)}] response : {msg}")
+        App.opponent_bat.y = msg["y"]
 
     def on_enter_room(self, msg):
         print(f"[{datetime.now().strftime(YMDHMS)}] enter : {msg}")
+        App.socketio_client.room_id = msg
         App.game_mode = 2
 
 
@@ -27,7 +29,7 @@ class SocketIOClient:
         self.host = host
         self.path = path
         self.client = socketio.Client()
-        self.connect()
+        self.room_id = None
 
     def connect(self):
         self.client.register_namespace(MyCustomNamespace(self.path))
@@ -39,8 +41,9 @@ class SocketIOClient:
     def get_sid(self):
         return self.client.get_sid(namespace=self.path)
 
-    def test(self, message):
-        self.client.emit("broadcast_message", message, namespace=self.path)
+    def send_game_status(self, params):
+        params["room_id"] = self.room_id
+        self.client.emit("send_game_status", params, namespace=self.path)
 
 
 class Bat:
@@ -61,21 +64,23 @@ class Bat:
 
 class App:
     game_mode: int = 0
+    bat: Bat
+    opponent_bat: Bat
+    socketio_client = SocketIOClient(host="http://localhost:3000", path="/test")
 
-    def __init__(self, host):
+    def __init__(self):
         pyxel.init(640, 360, title="Hello Pyxel")
 
-        App.game_mode = 1
+        App.game_mode = 0
 
-        self.socketio_client = SocketIOClient(host=host, path="/test")
-
-        self.bat = Bat(x=10, y=10)
+        App.bat = Bat(x=10, y=0)
+        App.opponent_bat = Bat(x=620, y=0)
 
         pyxel.run(self.update, self.draw)
 
     def update(self):
 
-        self.bat.update()
+        App.bat.update()
 
         if App.game_mode == 0:  # タイトル
             pass
@@ -83,30 +88,35 @@ class App:
             pass
         elif App.game_mode == 2:  # 対戦中
             pass
+            if pyxel.frame_count % 6 == 0:
+                App.socketio_client.send_game_status({"x": self.bat.x, "y": self.bat.y})
         elif App.game_mode == 3:  # 対戦終了
             pass
 
-        # self.socketio_client.test({"x": self.bat.x, "y": self.bat.y})
+        if pyxel.btn(pyxel.KEY_RETURN):
+            App.game_mode = 1
+            App.socketio_client.connect()
 
         # exit
         if pyxel.btn(pyxel.KEY_Q):
-            self.socketio_client.disconnect()
+            App.socketio_client.disconnect()
             sys.exit()
 
     def draw(self):
         pyxel.cls(0)
 
-        pyxel.text(0, 0, f"{self.socketio_client.get_sid()}", 3)
+        pyxel.text(0, 0, f"{App.socketio_client.get_sid()}", 3)
+        pyxel.text(0, 10, f"{pyxel.frame_count}", 3)
         if App.game_mode == 0:  # タイトル
             pass
         elif App.game_mode == 1:  # 待機部屋
             pyxel.text(40, 40, f"waiting room", 7)
         elif App.game_mode == 2:  # 対戦中
-            pass
+            App.opponent_bat.draw()
         elif App.game_mode == 3:  # 対戦終了
             pass
-        self.bat.draw()
+        App.bat.draw()
 
 
 if __name__ == "__main__":
-    App(host="http://localhost:3000")
+    App()
